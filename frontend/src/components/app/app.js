@@ -20,17 +20,33 @@ import { UserContext } from "../../utils/context";
 import styles from "./app.module.css";
 
 function App() {
-  const [userCtx, setUserCtx] = useState(null);
+  const [userCtx, setUserCtx] = useState({});
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    if (sessionStorage.getItem("auth_token")) {
-      getOwnUser().then((res) => {
-        setUserCtx(res);
-      });
-    } else {
+    const token = sessionStorage.getItem("auth_token");
+
+    if (!token) {
       setUserCtx({});
+      setIsLoading(false);
+      return;
     }
+
+    getOwnUser()
+      .then((res) => {
+        setUserCtx(res || {});
+      })
+      .catch(() => {
+        setUserCtx({});
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
   }, []);
+
+  if (isLoading) {
+    return <div>Loading...</div>;
+  }
 
   return (
     <div className={styles.app}>
@@ -56,7 +72,7 @@ const ApplicationView = () => {
   };
 
   if (!userCtx) {
-    return <></>;
+    return <div>Loading...</div>;
   }
 
   return (
