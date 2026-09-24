@@ -1,0 +1,28 @@
+# frontend/Dockerfile.pub
+
+FROM node:24-alpine AS builder
+
+WORKDIR /app
+
+# Кэшируем зависимости
+COPY package*.json ./
+RUN npm ci
+
+# Копируем код (убедитесь, что .dockerignore исключает node_modules и dist/build)
+COPY . .
+
+# Сборка
+RUN npm run build
+
+
+# --- Финальный образ ---
+FROM nginx:alpine AS production
+
+# ВАЖНО: проверь, какая папка получается: build или dist
+# Если у тебя Vite — скорее всего, это dist. Если CRA — build.
+COPY --from=builder /app/build /usr/share/nginx/html
+
+# Правильный путь и имя файла для Nginx
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+CMD ["nginx", "-g", "daemon off;"]
