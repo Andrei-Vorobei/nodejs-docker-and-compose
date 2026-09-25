@@ -11,15 +11,14 @@ RUN npm run build
 
 FROM node:24-alpine
 
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nodejs -u 1001
-
 WORKDIR /app
 
+COPY package*.json ./
+RUN npm ci --omit=dev --no-audit --no-fund --no-progress \
+	&& npm i -g pm2
+
 COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/package.json ./package.json
 
-USER nodejs
+COPY ./ecosystem.config.js ./
 
-CMD ["npm", "run", "start:prod"]
+ENTRYPOINT [ "pm2-runtime", "start", "ecosystem.config.js" ]

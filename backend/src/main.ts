@@ -17,7 +17,11 @@ async function bootstrap() {
 
   app.enableCors({
     // origin: true,
-    origin: ['http://localhost:3000'],
+    origin: [
+      'http://localhost:8081',
+      'https://magic-friday.ru',
+      'https://www.magic-friday.ru',
+    ],
     credentials: true,
   });
 

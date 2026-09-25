@@ -9,7 +9,7 @@ services:
     env_file:
       - ./backend/.env
     depends_on:
-      db:
+      db-postgres:
         condition: service_healthy
     networks:
       - KPD-internal
@@ -28,18 +28,15 @@ services:
       - KPD-app
     restart: unless-stopped
 
-  db:
+  db-postgres:
     container_name: KPD-db
     image: postgres:14-alpine
-    environment:
-      POSTGRES_DB: postgres
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
-      PGDATA: /var/lib/postgresql/data/pgdata
+    env_file:
+      - .env
     volumes:
-      - KPD-pgdata:/var/lib/postgresql/data/pgdata
+      - KPD-pgdata:${PGDATA}
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U super-user -d postgres-kpd"]
       interval: 5s
       timeout: 5s
       retries: 5
