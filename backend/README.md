@@ -1,177 +1,107 @@
-# КупиПодариДай Backend
+# Backend КупиПодариДай
 
-Backend сервиса вишлистов «КупиПодариДай» построен на NestJS, хранит данные в PostgreSQL и предоставляет REST API для пользователей, желаний, вишлистов и денежных взносов.
-
-## Стек
-
-- Node.js 16+
-- TypeScript
-- NestJS 9
-- PostgreSQL 14 + TypeORM
-- Passport: JWT, local strategy, Yandex OAuth
-- class-validator, Winston
+REST API сервиса вишлистов на NestJS 9, TypeScript, PostgreSQL 14 и TypeORM. Backend слушает порт `3001`; в Docker Compose он публикуется на `${BACKEND_PORT}`.
 
 ## Требования
 
-- Node.js 16 или новее
-- npm 10 или совместимый пакетный менеджер
-- PostgreSQL 12+ для локального запуска
-- Docker и Docker Compose для контейнерного запуска
+- Node.js 24 для Docker-образа; для локальной разработки используйте совместимую актуальную LTS-версию.
+- npm и PostgreSQL 12+ для запуска без Compose.
+- Docker Desktop с Docker Compose v2 для контейнерного запуска.
 
-## Конфигурация окружения
+## Конфигурация
 
-Создайте файл `backend/.env` в корне backend-модуля по шаблону ниже:
+Скопируйте [`.env.example`](.env.example) в `.env`. Для Compose используйте:
 
 ```dotenv
-JWT_SECRET=change_me
+JWT_SECRET=длинный-случайный-секрет
 YANDEX_CLIENT_ID=
 YANDEX_CLIENT_SECRET=
-YANDEX_REDIRECT_URI=http://localhost:3001/oauth/yandex/callback
-
-DB_HOST=localhost
-DB_PORT=5432
-DB_USERNAME=postgres
-DB_PASSWORD=change_me
-DB_DATABASE=kupipodariday
-```
-
-Для запуска через Docker Compose используйте значения для контейнерной сети:
-
-```dotenv
+YANDEX_REDIRECT_URI=https://example.com/oauth/yandex/callback
 DB_HOST=db-postgres
 DB_PORT=5432
 DB_USERNAME=postgres
-DB_PASSWORD=change_me
+DB_PASSWORD=пароль-из-root-env
 DB_DATABASE=postgres
 ```
 
-## Запуск локально
+`DB_USERNAME`, `DB_PASSWORD` и `DB_DATABASE` должны совпадать с `POSTGRES_USER`, `POSTGRES_PASSWORD` и `POSTGRES_DB` из root `.env`. Для локального PostgreSQL замените `DB_HOST` на `localhost` и укажите локальные учетные данные.
 
-1. Установите зависимости:
-
-```bash
-npm install
-```
-
-2. Создайте базу данных PostgreSQL:
-
-```sql
-CREATE DATABASE kupipodariday;
-```
-
-3. Запустите приложение в режиме разработки:
-
-```bash
-npm run start:dev
-```
-
-API будет доступно по адресу:
-
-```text
-http://localhost:3001
-```
+Не публикуйте `.env`, JWT secret или OAuth secret в репозитории и логах. Для production callback Яндекса должен быть HTTPS и точно совпадать с зарегистрированным URI.
 
 ## Запуск через Docker
 
-Из корня проекта:
+Из корня репозитория:
 
-```bash
-docker compose up --build -d
+```powershell
+Copy-Item .env.example .env
+Copy-Item backend/.env.example backend/.env
+# отредактируйте оба файла
+docker compose config
+docker compose up --build -d backend db-postgres
+docker compose logs -f backend
 ```
 
-Публичный адрес приложения:
+Остановить backend и базу без удаления данных:
 
-```text
-https://magic-friday.ru
+```powershell
+docker compose stop backend db-postgres
 ```
 
-> Для локального окружения используйте локальные адреса, которые задаются в переменных окружения и `docker-compose.yml`.
+## Локальный запуск
 
-## Команды проекта
+```powershell
+npm ci
+npm run start:dev
+```
+
+API будет доступно на `http://localhost:3001`. Production-подобная сборка:
+
+```powershell
+npm run build
+npm run start:prod
+```
+
+## Команды
 
 | Команда | Назначение |
 | --- | --- |
-| `npm run start` | запуск приложения |
-| `npm run start:dev` | запуск в режиме watch |
-| `npm run start:debug` | запуск в режиме отладки |
+| `npm run start:dev` | запуск с watch |
 | `npm run build` | сборка в `dist/` |
+| `npm run start:prod` | запуск собранного приложения |
 | `npm run lint` | проверка ESLint |
-| `npm run lint:fix` | автоисправление ESLint |
-| `npm test` | запуск unit-тестов |
-| `npm run test:e2e` | запуск e2e тестов |
-| `npm run typeorm` | CLI для TypeORM |
-| `npm run migrate:generate -- MigrationName` | генерация миграции |
-| `npm run migrate:create -- MigrationName` | создание миграции |
-| `npm run migrate:up` | применение миграций |
+| `npm test` | unit-тесты |
+| `npm run test:cov` | тесты с coverage |
+| `npm run test:e2e` | e2e-тесты, если присутствует конфигурация `test/` |
+| `npm run migrate:up` | применение миграций TypeORM |
 | `npm run migrate:down` | откат последней миграции |
 
-## Авторизация
+## API
 
-После `POST /auth/signin` или OAuth-входа API возвращает JWT:
-
-```json
-{
-  "access_token": "eyJ..."
-}
-```
-
-Используйте токен в заголовке:
+Все защищенные маршруты требуют заголовок:
 
 ```http
 Authorization: Bearer <access_token>
 ```
 
-Токен действует 1 час. Регистрация локальных пользователей осуществляется через `POST /auth/signup`, OAuth-авторизация запускается по `GET /oauth/yandex`.
-
-## REST API
-
-Все пути ниже указаны относительно `http://localhost:3001` или проксируемого хоста. Защищённые маршруты требуют JWT, если не оговорено другое.
-
-### Auth
+### Авторизация
 
 | Метод | Путь | JWT | Назначение |
 | --- | --- | --- | --- |
-| `POST` | `/auth/signup` | Нет | Регистрация пользователя |
-| `POST` | `/auth/signin` | Нет | Вход по `username` и `password` |
-| `GET` | `/oauth/yandex` | Нет | Начало OAuth-входа через Яндекс |
-| `GET` | `/oauth/yandex/callback` | Нет | Callback OAuth, возвращает JWT |
+| `POST` | `/auth/signup` | Нет | регистрация |
+| `POST` | `/auth/signin` | Нет | вход по логину и паролю |
+| `GET` | `/oauth/yandex` | Нет | начало OAuth Яндекса |
+| `GET` | `/oauth/yandex/callback` | Нет | OAuth callback |
 
-Пример регистрации:
+### Ресурсы
 
-```json
-{
-  "username": "anna",
-  "email": "anna@example.com",
-  "password": "strong-password",
-  "about": "Люблю книги",
-  "avatar": "https://example.com/avatar.jpg"
-}
-```
-
-### Users
-
-| Метод | Путь | Назначение |
+| Ресурс | Открытые операции | Защищенные операции |
 | --- | --- | --- |
-| `GET` | `/users/me` | получить свой профиль |
-| `PATCH` | `/users/me` | обновить профиль |
-| `GET` | `/users/me/wishes` | получить свои желания |
-| `GET` | `/users/:username` | получить публичный профиль |
-| `GET` | `/users/:username/wishes` | получить желания пользователя |
-| `POST` | `/users/find` | найти пользователей по `query` |
+| Users | `GET /users/:username`, `GET /users/:username/wishes`, `POST /users/find` | `/users/me` и `/users/me/wishes` |
+| Wishes | `GET /wishes/last`, `GET /wishes/top` | CRUD, copy |
+| Wishlists | нет | CRUD |
+| Offers | нет | `GET`, `POST` и `GET /offers/:id` |
 
-### Wishes
-
-| Метод | Путь | JWT | Назначение |
-| --- | --- | --- | --- |
-| `GET` | `/wishes/last` | Нет | последние 40 желаний |
-| `GET` | `/wishes/top` | Нет | популярные желания |
-| `GET` | `/wishes/:id` | Да | получить желание |
-| `POST` | `/wishes` | Да | создать желание |
-| `POST` | `/wishes/:id/copy` | Да | скопировать желание |
-| `PATCH` | `/wishes/:id` | Да | обновить свое желание |
-| `DELETE` | `/wishes/:id` | Да | удалить свое желание |
-
-Тело `POST /wishes`:
+Пример тела создания желания:
 
 ```json
 {
@@ -183,74 +113,20 @@ Authorization: Bearer <access_token>
 }
 ```
 
-### Wishlists
+Входные DTO проверяются глобальным `ValidationPipe`: лишние поля отклоняются с `400 Bad Request`. Ошибки логируются в JSON в stdout; ошибки уровня `error` дополнительно записываются в `error.log` внутри контейнера.
 
-Все маршруты раздела требуют JWT.
-
-| Метод | Путь | Назначение |
-| --- | --- | --- |
-| `GET` | `/wishlists` | получить все вишлисты |
-| `GET` | `/wishlists/:id` | получить вишлист |
-| `POST` | `/wishlists` | создать вишлист |
-| `PATCH` | `/wishlists/:id` | обновить свой вишлист |
-| `DELETE` | `/wishlists/:id` | удалить свой вишлист |
-
-Тело `POST /wishlists`:
-
-```json
-{
-  "name": "Идеи к дню рождения",
-  "image": "https://example.com/birthday.jpg",
-  "itemsId": [1, 2, 3]
-}
-```
-
-### Offers
-
-Все маршруты раздела требуют JWT.
-
-| Метод | Путь | Назначение |
-| --- | --- | --- |
-| `GET` | `/offers` | получить доступные пользователю взносы |
-| `GET` | `/offers/:id` | получить взнос |
-| `POST` | `/offers` | сделать взнос за чужое желание |
-
-Тело `POST /offers`:
-
-```json
-{
-  "itemId": 1,
-  "amount": 1500,
-  "hidden": false
-}
-```
-
-Логика ограничений включает проверку, что нельзя сделать взнос за своё желание, перебрать доступную сумму или внести средства после полного сбора.
-
-## Валидация данных и логирование
-
-- все входящие DTO проходят строгую валидацию
-- неизвестные поля приводят к ошибке `400 Bad Request`
-- допустимые типы автоматически приводятся к нужному формату
-- пароли, email и Yandex ID не возвращаются в публичных профилях
-- ошибки логируются в JSON-формате в консоль, а ошибки уровня `error` сохраняются в `error.log`
-
-## Структура backend-проекта
+## Структура
 
 ```text
 src/
-  auth/       JWT, локальная авторизация и OAuth Яндекс
-  users/      пользователи, профили и бизнес-логика
-  wishes/     желания пользователей
-  wishlists/  подборки желаний
-  offers/     денежные взносы
-  filter/     глобальный фильтр исключений
-  main.ts     запуск приложения и глобальные middleware
+├── auth/       # JWT, local и Yandex OAuth
+├── users/      # пользователи и профили
+├── wishes/     # желания
+├── wishlists/  # подборки желаний
+├── offers/     # взносы
+├── filter/     # глобальный exception filter
+├── app.module.ts
+└── main.ts
 ```
 
-## Дополнительно
-
-- `ormconfig.ts` используется для TypeORM CLI
-- `synchronize: true` включён в runtime-configuration, поэтому таблицы создаются автоматически во время запуска
-- `ConfigModule` читает переменные из `.env` глобально для всего приложения
-
+TypeORM runtime сейчас использует `synchronize: true`. Перед production-изменениями схемы проверьте миграционный процесс и не полагайтесь на автоматическую синхронизацию как на замену backup/rollback стратегии.

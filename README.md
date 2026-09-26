@@ -1,186 +1,121 @@
 # КупиПодариДай
 
-Полный стек-проект для сервиса вишлистов «КупиПодариДай» с React frontend, NestJS backend и PostgreSQL. Приложение упаковано в Docker Compose и обслуживается через публичный адрес https://magic-friday.ru.
+Полный стек сервиса вишлистов: React-клиент, NestJS API и PostgreSQL. Локальный запуск выполняется через Docker Compose; production-сборка frontend отдается Nginx, backend работает в контейнере Node.js.
 
-## Доступы
+## Содержание
 
-- Frontend: https://magic-friday.ru
+- [Архитектура](#архитектура)
+- [Быстрый старт](#быстрый-старт)
+- [Конфигурация](#конфигурация)
+- [Проверка и эксплуатация](#проверка-и-эксплуатация)
+- [Локальная разработка](#локальная-разработка)
+- [Структура](#структура)
+- [Документация модулей](#документация-модулей)
 
 ## Архитектура
 
-Проект состоит из трёх основных компонентов:
+| Сервис | Назначение | Внутренний порт | Публикуемый порт |
+| --- | --- | ---: | ---: |
+| `frontend` | React SPA и reverse proxy Nginx | 80 | `${FRONTEND_PORT}` |
+| `backend` | REST API на NestJS | 3001 | `${BACKEND_PORT}` |
+| `db-postgres` | PostgreSQL 14 | 5432 | не публикуется |
+| `adminer` | Администрирование PostgreSQL | 8080 | `${ADMINER_PORT}` |
 
-- `frontend/` — React SPA на базе `create-react-app`, обслуживается через Nginx
-- `backend/` — NestJS REST API с JWT, Passport, OAuth через Яндекс и TypeORM
-- PostgreSQL — основная база данных, запускается как сервис `db-postgres`
+Сервисы `backend` и `db-postgres` находятся во внутренней сети. Frontend подключен к frontend-сети и проксирует запросы `/api/*` к `backend:3001`.
 
-Также в контейнерной топологии есть:
+## Быстрый старт
 
-- `adminer` — веб-интерфейс для управления PostgreSQL
-- `frontend` и `backend` в сети `KPD-app` для внутренней связи
-- `db-postgres` в изолированной внутренней сети `KPD-internal`
+Требования: Docker Desktop с Docker Compose v2 и доступ к Docker Hub.
 
-## Сервисная структура Docker Compose
-
-```yaml
-services:
-  backend:
-    build: ./backend
-    ports: ${BACKEND_PORT}:3001
-    env_file: ./backend/.env
-    depends_on: db-postgres
-
-  frontend:
-    build: ./frontend
-    ports: ${FRONTEND_PORT}:80
-    depends_on: backend
-
-  db-postgres:
-    image: postgres:14-alpine
-    env_file: .env
-    volumes: KPD-pgdata:${PGDATA}
-
-  adminer:
-    image: adminer
-    ports: ${ADMINER_PORT}:8080
+```powershell
+Copy-Item .env.example .env
+Copy-Item backend/.env.example backend/.env
 ```
 
-## Технологии
+Перед запуском измените как минимум `POSTGRES_PASSWORD`, `DB_PASSWORD` и `JWT_SECRET`. Для Docker в `backend/.env` задайте `DB_HOST=db-postgres`, а значения `DB_USERNAME`, `DB_PASSWORD` и `DB_DATABASE` должны соответствовать root `.env`.
 
-### Frontend
-
-- React 17
-- React Router DOM 5
-- CRA / react-scripts 5
-- Nginx для отдачи собранного приложения
-
-### Backend
-
-- NestJS 9
-- TypeScript
-- PostgreSQL + TypeORM
-- Passport JWT / Local / Yandex OAuth
-- class-validator
-- Winston logging
-
-## Схема запуска проекта
-
-```text
-1. Копируем шаблоны переменных окружения
-   cp .env.example .env
-   cp backend/.env.example backend/.env
-
-2. Заполняем значения в .env и backend/.env
-   - JWT_SECRET
-   - YANDEX_CLIENT_ID / YANDEX_CLIENT_SECRET
-   - DB_* параметры
-   - порты для локального/докер запуска
-
-3. Поднимаем контейнеры
-   docker compose up --build -d
-
-4. Проверяем состояние сервисов
-   docker compose ps
-   docker compose logs -f backend frontend db-postgres
-
-5. Открываем приложение через публичный адрес
-   https://magic-friday.ru
+```powershell
+docker compose config
+docker compose up --build -d
+docker compose ps
 ```
 
-## Переменные окружения
+После запуска откройте `http://localhost:${FRONTEND_PORT}`. Фактический порт берется из `.env`; для шаблона репозитория это `2222`. Adminer доступен на `http://localhost:${ADMINER_PORT}`.
 
-### Корневой `.env` (шаблон)
+## Конфигурация
 
-```dotenv
-# Порты приложений
-BACKEND_PORT=3001
-FRONTEND_PORT=80
-ADMINER_PORT=8080
+Шаблоны конфигурации находятся в [.env.example](.env.example) и [backend/.env.example](backend/.env.example). Не добавляйте реальные `.env` в Git.
 
-# PostgreSQL
-POSTGRES_HOST=db-postgres
-POSTGRES_PORT=5432
-POSTGRES_DB=postgres
-POSTGRES_USER=postgres
-POSTGRES_PASSWORD=change_me
-PGDATA=/var/lib/postgresql/data
+### Root `.env`
+
+| Переменная | Назначение |
+| --- | --- |
+| `BACKEND_PORT` | порт API на хосте |
+| `FRONTEND_PORT` | порт frontend на хосте |
+| `ADMINER_PORT` | порт Adminer на хосте |
+| `POSTGRES_DB` | база PostgreSQL |
+| `POSTGRES_USER` | пользователь PostgreSQL |
+| `POSTGRES_PASSWORD` | пароль PostgreSQL |
+| `PGDATA` | каталог данных внутри контейнера |
+
+### `backend/.env`
+
+| Переменная | Назначение |
+| --- | --- |
+| `JWT_SECRET` | секрет подписи JWT; используйте длинное случайное значение |
+| `YANDEX_CLIENT_ID` / `YANDEX_CLIENT_SECRET` | учетные данные OAuth Яндекса |
+| `YANDEX_REDIRECT_URI` | callback, зарегистрированный в приложении Яндекса |
+| `DB_HOST` / `DB_PORT` | адрес и порт PostgreSQL; в Compose это `db-postgres` и `5432` |
+| `DB_USERNAME` / `DB_PASSWORD` / `DB_DATABASE` | учетные данные базы |
+
+В production OAuth callback должен использовать публичный HTTPS-адрес. Секреты передавайте через защищенное хранилище или секреты CI/CD.
+
+## Проверка и эксплуатация
+
+```powershell
+docker compose ps
+docker compose logs -f backend
+docker compose logs -f frontend
+docker compose logs -f db-postgres
+docker compose down
 ```
 
-### Backend `backend/.env` (шаблон)
+`docker compose down` не удаляет named volume `KPD-pgdata`. Команда `docker compose down -v` удаляет volume и данные базы. Volume не заменяет резервное копирование. Adminer не следует публиковать в интернет без дополнительной защиты.
 
-```dotenv
-JWT_SECRET=change_me
-YANDEX_CLIENT_ID=
-YANDEX_CLIENT_SECRET=
-YANDEX_REDIRECT_URI=http://localhost:3001/oauth/yandex/callback
+## Локальная разработка
 
-DB_HOST=localhost
-DB_PORT=5432
-DB_USERNAME=postgres
-DB_PASSWORD=change_me
-DB_DATABASE=kupipodariday
+Backend:
+
+```powershell
+cd backend
+npm ci
+npm run start:dev
 ```
 
-> Для запуска в Docker используйте `DB_HOST=db-postgres`. Для локальной разработки обычно подходит `localhost`.
+Frontend в отдельном терминале:
 
-## Структура проекта
+```powershell
+cd frontend
+npm ci
+npm start
+```
+
+Backend слушает `http://localhost:3001`, frontend dev server — `http://localhost:3000`. Для локального backend нужен PostgreSQL и `backend/.env` с `DB_HOST=localhost`.
+
+## Структура
 
 ```text
 .
-├── backend/                  # NestJS API
-│   ├── src/                 # исходники приложения
-│   ├── .env                 # локальные переменные backend
-│   ├── Dockerfile.pub       # контейнер backend
-│   ├── package.json         # зависимости и скрипты backend
-│   └── README.md            # документация по API и запуску backend
-├── frontend/                # React клиент
-│   ├── src/                 # компоненты, страницы, API-клиент
-│   ├── nginx/              # конфиг Nginx для production build
-│   ├── Dockerfile.pub       # контейнер frontend
-│   ├── package.json         # зависимости и скрипты frontend
-│   └── README.md            # документация по frontend
-├── .env                     # переменные контейнеров PostgreSQL и портов
-├── docker-compose.yml      # контейнерная оркестрация
-├── README.md                # общая документация проекта
-└── .env.example             # шаблон root env
+├── backend/            # NestJS API, TypeORM и авторизация
+├── frontend/           # React SPA и конфигурация Nginx
+├── docker-compose.yml  # контейнерная топология
+├── .env.example        # шаблон переменных Compose/PostgreSQL
+└── README.md           # документация проекта
 ```
 
-## Полезные команды
+## Документация модулей
 
-```bash
-# Запуск контейнеров
- docker compose up -d
+- [backend/README.md](backend/README.md) — API, авторизация, миграции и команды backend
+- [frontend/README.md](frontend/README.md) — сборка, dev server и интеграция с API
 
-# Пересборка
- docker compose up --build -d
-
-# Просмотр логов
- docker compose logs -f backend
- docker compose logs -f frontend
-
-# Остановка
- docker compose down
-
-# Проверка контейнеров
- docker compose ps
-```
-
-## Документация по модулям
-
-- [backend/README.md](backend/README.md) — описание API, auth, DTO, запуск и команды backend
-- [frontend/README.md](frontend/README.md) — описание frontend-части и работы с UI
-
-## Основные возможности
-
-- регистрация и авторизация пользователей
-- управление профилями
-- CRUD для желаний
-- создание и редактирование вишлистов
-- внесение взносов на желания
-- OAuth вход через Яндекс
-- защитa маршрутов через JWT
-- логирование ошибок в JSON и запись `error.log`
-
-## Примечание по продакшен-среде
-
-Проект настроен под production-сборку: frontend собирается и отдаётся Nginx, backend запускается как Node-процесс внутри контейнера, а база данных хранится в named volume `KPD-pgdata`.
+Публичный адрес развернутого окружения: [https://magic-friday.ru](https://magic-friday.ru).

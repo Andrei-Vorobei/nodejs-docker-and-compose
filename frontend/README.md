@@ -1,144 +1,78 @@
-# Фронтенд КупиПодариДай
+# Frontend КупиПодариДай
 
-React-приложение пользовательского интерфейса сервиса вишлистов «КупиПодариДай». Клиент общается с backend через HTTP API и использует JWT-токен, хранящийся в `sessionStorage`.
+React 17 SPA сервиса вишлистов. В production frontend собирается в статические файлы и обслуживается Nginx; запросы `/api/*` проксируются к backend.
 
-## Публичный адрес
+## Требования
 
-- https://magic-friday.ru
+- Node.js 24 для Docker-сборки; для локальной разработки используйте совместимую актуальную LTS-версию.
+- npm.
+- Docker Desktop с Docker Compose v2 для полного стека.
 
-## Схема запуска
+## Локальная разработка
 
-```text
-1. Скопировать шаблоны переменных окружения
-   cp .env.example .env
-   cp backend/.env.example backend/.env
-
-2. Подставить корректные значения в .env и backend/.env
-
-3. Запустить контейнеры
-   docker compose up --build -d
-
-4. Открыть проект по адресу
-   https://magic-friday.ru
-```
-
-## Шаблон окружения
-
-```dotenv
-# Корневой .env
-BACKEND_PORT=3001
-FRONTEND_PORT=80
-ADMINER_PORT=8080
-
-POSTGRES_HOST=db-postgres
-POSTGRES_PORT=5432
-POSTGRES_DB=postgres
-POSTGRES_USER=postgres
-POSTGRES_PASSWORD=change_me
-PGDATA=/var/lib/postgresql/data
-```
-
-```dotenv
-# backend/.env
-JWT_SECRET=change_me
-YANDEX_CLIENT_ID=
-YANDEX_CLIENT_SECRET=
-YANDEX_REDIRECT_URI=http://localhost:3001/oauth/yandex/callback
-
-DB_HOST=localhost
-DB_PORT=5432
-DB_USERNAME=postgres
-DB_PASSWORD=change_me
-DB_DATABASE=kupipodariday
-```
-
-## Технологии
-
-- React 17
-- React Router DOM 5
-- Create React App
-- Nginx в production-сборке
-
-## Как работает
-
-- SPA загружается через Nginx
-- все запросы к API идут по пути `/api`
-- в production конфигурации Nginx проксирует `/api/*` на сервис `backend:3001`
-- после входа токен сохраняется в `sessionStorage` и отправляется в `Authorization: Bearer ...`
-
-## Запуск локально
-
-1. Установите зависимости:
-
-```bash
-npm install
-```
-
-2. Запустите dev-режим:
-
-```bash
+```powershell
+npm ci
 npm start
 ```
 
-Приложение будет доступно по адресу:
+Dev server доступен на `http://localhost:3000`. Команда `npm start` запускает Create React App в watch-режиме.
 
-```text
-http://localhost:3000
+Проверка тестов:
+
+```powershell
+npm test -- --watchAll=false
 ```
 
-## Сборка production
+## Production-сборка
 
-```bash
+```powershell
+npm ci
 npm run build
 ```
 
-После сборки файлы будут лежать в папке `build/` и могут раздаваться через Nginx.
+Результат находится в `build/`. Dockerfile копирует его в Nginx и использует конфигурацию [nginx/conf.d/default.conf](nginx/conf.d/default.conf). Локальный Docker frontend запускается из корня репозитория:
 
-## Основной API-контракт
+```powershell
+Copy-Item .env.example .env
+Copy-Item backend/.env.example backend/.env
+docker compose up --build -d frontend backend db-postgres
+```
 
-Frontend использует следующие базовые маршруты через `URL = "/api"`:
+Откройте `http://localhost:${FRONTEND_PORT}`. Значение порта берется из root `.env`; в шаблоне репозитория это `2222`, а не фиксированный `8081`.
 
-- `POST /auth/signup`
-- `POST /auth/signin`
-- `GET /users/me`
-- `PATCH /users/me`
-- `GET /users/:username`
-- `POST /users/find`
-- `GET /wishes/last`
-- `GET /wishes/top`
-- `GET /wishes/:id`
-- `POST /wishes`
-- `PATCH /wishes/:id`
-- `DELETE /wishes/:id`
-- `POST /wishlists`
-- `GET /wishlists`
-- `POST /offers`
+## Работа с API
 
-## Структура frontend
+Клиент использует базовый путь `/api` и передает JWT в заголовке `Authorization: Bearer ...`. Токен хранится в `sessionStorage` и удаляется при завершении сессии браузера.
+
+Основные операции:
+
+- `POST /api/auth/signup` и `POST /api/auth/signin`
+- `GET` и `PATCH /api/users/me`
+- `GET /api/wishes/last`, `GET /api/wishes/top`
+- CRUD `/api/wishes`
+- CRUD `/api/wishlists`
+- `GET` и `POST /api/offers`
+
+В dev-режиме проверьте, что API доступно на `http://localhost:3001` и что используемый API base URL соответствует настройкам клиента. В Docker proxy обращается к имени сервиса `backend`, а не к `localhost`.
+
+## Структура
 
 ```text
 src/
-  components/       UI-компоненты и страницы
-  utils/            константы, API-клиент, helpers
-  images/           статические ресурсы
-  index.js          точка входа приложения
-  index.css         глобальные стили
+├── components/   # страницы и UI-компоненты
+├── utils/        # API-клиент, контекст и helpers
+├── images/       # статические ресурсы
+├── fonts/        # шрифты
+├── index.js      # точка входа
+└── index.css     # глобальные стили
 ```
 
-## Проверка работы в Docker
+## Эксплуатация
 
-Из корня проекта:
-
-```bash
-docker compose up --build -d
+```powershell
+docker compose logs -f frontend
+docker compose restart frontend
+docker compose down
 ```
 
-Frontend доступен на:
-
-```text
-http://localhost:8081
-```
-
-Для полного стека также запущены backend и PostgreSQL, а Nginx внутри frontend контейнера маршрутизирует REST-запросы к backend.
-
-
+Перед публикацией проверьте production build, маршрутизацию SPA после прямого перехода на URL и запросы `/api`. Публичный адрес развернутого окружения: [https://magic-friday.ru](https://magic-friday.ru).
